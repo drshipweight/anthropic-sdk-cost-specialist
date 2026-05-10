@@ -1,0 +1,19 @@
+{
+  "name": "anthropic-sdk-cost-specialist-evals",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Eval suite for the Anthropic SDK Cost & Caching Coach.",
+  "scripts": {
+    "eval": "tsx run.ts",
+    "eval:bun": "bun run.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  }
+}

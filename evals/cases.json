@@ -1,0 +1,188 @@
+{
+  "version": "1.0",
+  "description": "Eval cases for the Anthropic SDK Cost & Caching Coach. Each case asserts the specialist follows its rules, references the right docs, and never invents prices or wraps Claude in a disallowed framework.",
+  "cases": [
+    {
+      "id": "audit-001-happy-path",
+      "title": "Caching audit on uncached Sonnet system prompt",
+      "shape": "audit",
+      "prompt": "Here's a Claude API call I'm making about 8,000 times a day. Should I change anything?\n\n```ts\nconst response = await client.messages.create({\n  model: \"claude-sonnet-4-6\",\n  max_tokens: 1024,\n  system: SYSTEM_PROMPT, // ~5,500 tokens, identical every call\n  messages: [{ role: \"user\", content: userQuery }], // ~300 tokens\n});\n```\n\nAverage output is 700 tokens.",
+      "must_include": [
+        "Verdict",
+        "cache_control",
+        "ephemeral",
+        "Confidence"
+      ],
+      "must_not_include": [
+        "Great question",
+        "LangChain",
+        "Vercel AI SDK",
+        "LiteLLM"
+      ],
+      "judge_criteria": "Response must (a) follow the four-section audit shape: Verdict, Edits (with code), Cost impact (with a before/after table), Confidence. (b) Recommend caching the SYSTEM_PROMPT with cache_control on the array form. (c) Note that 5,500 tokens clears Sonnet 4.6's 2,048 minimum. (d) Provide cost numbers per 1,000 calls using prices from pricing-snapshot.md (Sonnet 4.6 input $3, cache read $0.30, cache write 5m $3.75, output $15). (e) State assumptions plainly. (f) Confidence must be one of High/Medium/Low with the single fact that would move it. Fail if any major section is missing or if any framework wrapper is recommended."
+    },
+    {
+      "id": "audit-002-below-threshold",
+      "title": "Refuse to cache content below the model minimum",
+      "shape": "audit",
+      "prompt": "I want to add prompt caching to this Opus 4.7 call. Help me?\n\n```ts\nconst response = await client.messages.create({\n  model: \"claude-opus-4-7\",\n  max_tokens: 512,\n  system: \"You are a helpful assistant that summarizes meeting notes in 3 bullet points.\", // ~25 tokens\n  messages: [{ role: \"user\", content: meetingNotes }],\n});\n```",
+      "must_include": [
+        "4,096",
+        "minimum"
+      ],
+      "must_not_include": [
+        "Great question",
+        "ephemeral\" }"
+      ],
+      "judge_criteria": "Response must explicitly state that the system prompt (~25 tokens) is far below Opus 4.7's 4,096-token minimum cacheable size and therefore should NOT be wrapped in cache_control as-is. Should recommend either bulking up the cached content with related stable material (tools, examples, format spec), dropping to a model with a lower threshold (Sonnet 4.5 at 1,024), or accepting that this content is too small to cache. Should NOT pretend to add a cache_control block that won't actually cache. Verdict line should reflect this."
+    },
+    {
+      "id": "pipeline-001-multi-model-routing",
+      "title": "Multi-step pipeline routing recommendation",
+      "shape": "pipeline",
+      "prompt": "I'm building a pipeline that does four things per request: (1) classify incoming support tickets into one of 8 categories, (2) extract structured data (customer ID, product, severity) from the ticket body, (3) draft a 2-paragraph response, (4) score the draft for tone against a rubric. I'm using Opus 4.7 for all four steps. Volume: 2,000 tickets/day.",
+      "must_include": [
+        "claude-haiku-4-5",
+        "claude-sonnet-4-6",
+        "claude-opus-4-7",
+        "Confidence"
+      ],
+      "must_not_include": [
+        "LangChain",
+        "Vercel AI SDK"
+      ],
+      "judge_criteria": "Response must produce per-step model recommendations with explicit reasoning. Classification (step 1) should go to Haiku 4.5. Extraction and Draft should go to Sonnet 4.6 (or with strong reasoning, mixed). Scoring/judge (step 4) should go to Opus 4.7 with the explicit reasoning that the judge must be different from the SUT to avoid self-grading bias. Must include a cost comparison (Opus-everywhere vs mixed) per 1,000 runs using pricing-snapshot.md prices, with assumed token counts stated. Must include cache structure recommendations and observability hooks. Confidence one of High/Medium/Low."
+    },
+    {
+      "id": "dashboard-001-input-tokens-confusion",
+      "title": "Cost dashboard misreads input_tokens",
+      "shape": "audit",
+      "prompt": "My cost dashboard reads `usage.input_tokens` from every response and multiplies by the input price to get the input bill. My cache-hit rate looks suspiciously stable around 40%. Am I doing this right?",
+      "must_include": [
+        "cache_read_input_tokens",
+        "cache_creation_input_tokens",
+        "input_tokens"
+      ],
+      "must_not_include": [
+        "Great question",
+        "LangChain"
+      ],
+      "judge_criteria": "Response must explain that input_tokens represents only the post-breakpoint fresh portion, NOT total input. Must give the correct formula: total_input = cache_read_input_tokens + cache_creation_input_tokens + input_tokens. Must explain why this makes the cache-hit rate calculation wrong (denominator is incomplete). Must hand the user a paste-ready calculator or formula. Should reference usage-fields-reference.md."
+    },
+    {
+      "id": "boundary-001-langchain",
+      "title": "Refuse LangChain integration help",
+      "shape": "boundary",
+      "prompt": "How do I best configure LangChain's ChatAnthropic class to use prompt caching with the new 1-hour TTL?",
+      "must_include": [
+        "out of scope"
+      ],
+      "must_not_include": [
+        "from langchain",
+        "ChatAnthropic",
+        "import"
+      ],
+      "judge_criteria": "Response must be a single short sentence (or very close to it) declining to help with LangChain and redirecting to a covered topic (e.g., 'I can audit the equivalent direct @anthropic-ai/sdk call instead'). Must NOT provide LangChain code or configuration. Must NOT apologize. Must name the boundary plainly."
+    },
+    {
+      "id": "boundary-002-fine-tuning",
+      "title": "Refuse fine-tuning request",
+      "shape": "boundary",
+      "prompt": "What's the cheapest way to fine-tune Claude on our customer support transcripts?",
+      "must_include": [
+        "out of scope"
+      ],
+      "must_not_include": [
+        "fine-tune Claude on",
+        "training data prep"
+      ],
+      "judge_criteria": "Response must decline in roughly one sentence and redirect to a covered topic (e.g., 'I can audit the prompt structure you'd feed Claude instead'). Should not pretend Anthropic offers fine-tuning. Should not redirect to OpenAI. No apology, no preamble."
+    },
+    {
+      "id": "boundary-003-hipaa",
+      "title": "Refuse HIPAA / compliance review",
+      "shape": "boundary",
+      "prompt": "Can you review my Claude integration for HIPAA compliance? I'm sending PHI in the user messages.",
+      "must_include": [
+        "out of scope"
+      ],
+      "must_not_include": [
+        "HIPAA-compliant",
+        "BAA"
+      ],
+      "judge_criteria": "Response must decline HIPAA/compliance review in roughly one sentence. Should redirect to a covered topic if one exists (e.g., cost or caching of the call shape). Must not provide compliance guidance, must not pretend to assess HIPAA fit. No apology."
+    },
+    {
+      "id": "clarify-001-missing-volume",
+      "title": "Ask for the three numbers when they're missing",
+      "shape": "clarifying",
+      "prompt": "I'm using Claude Sonnet 4.6 for a chatbot. Should I turn on caching?",
+      "must_include": [
+        "model",
+        "volume"
+      ],
+      "must_not_include": [
+        "Great question",
+        "$"
+      ],
+      "judge_criteria": "Response must ask for missing context — at minimum the average input/output token counts and call volume. May also confirm the model. Should be 1-3 sentences (the 'quick clarifying answer' length default). Must NOT produce a confident dollar estimate without the numbers, and must NOT label any answer as 'High' confidence. If the response gives directional guidance, it must be labeled 'directional' with assumptions stated."
+    },
+    {
+      "id": "thinking-001-output-billing",
+      "title": "Extended thinking question — must mention output rate billing",
+      "shape": "audit",
+      "prompt": "I just turned on extended thinking for my Sonnet 4.6 agent with a 4,000-token budget. My costs jumped 4x. What happened? My input tokens didn't change.",
+      "must_include": [
+        "output_tokens",
+        "thinking"
+      ],
+      "must_not_include": [
+        "input_tokens jumped"
+      ],
+      "judge_criteria": "Response must explain that extended thinking tokens are billed at the output rate and counted inside usage.output_tokens. Should reference extended-thinking-cost.md. Should explain why the user's input_tokens stayed flat (thinking is output) and that the output_tokens grew by ~budget_tokens per call. Should suggest tuning budget_tokens to the smallest value that holds eval performance, or turning thinking off if eval doesn't improve."
+    },
+    {
+      "id": "tools-001-defs-as-input",
+      "title": "Tool definitions costing real input tokens",
+      "shape": "audit",
+      "prompt": "I have an agent with 8 tool definitions in the `tools` array, totaling about 3,000 tokens of JSON schema. The system prompt is small (~400 tokens). Volume is 12,000 calls/day on Sonnet 4.6. Cache helping?",
+      "must_include": [
+        "tools",
+        "cache_control",
+        "2,048"
+      ],
+      "must_not_include": [
+        "LangChain"
+      ],
+      "judge_criteria": "Response must explain that tool definitions count as input tokens on every call. Should recommend cache_control on the LAST item in the tools array. Should note the prefix order (tools → system → messages) and that a breakpoint at end-of-tools caches the tools block. Should compute the savings: ~3,000 tokens × 12,000 calls/day × $3/M = $108/day uncached vs ~$10.80/day cached after the first call. Should reference tool-use-cost.md. The 3,000-token tools array clears Sonnet 4.6's 2,048 minimum."
+    },
+    {
+      "id": "files-001-not-a-cache",
+      "title": "Files API is not a cache substitute",
+      "shape": "audit",
+      "prompt": "I'm uploading a 40-page PDF via the Files API once and then asking the model 30 questions about it across the day. Since I uploaded once, I assume I'm not paying for the document tokens on every question. Right?",
+      "must_include": [
+        "cache_control",
+        "input tokens"
+      ],
+      "must_not_include": [
+        "you're correct"
+      ],
+      "judge_criteria": "Response must correct the user's misconception: the Files API saves bandwidth and request body size, NOT per-token cost. Each reference to the file_id still incurs the document's full input-token cost on every call unless cache_control is added after the file reference. Should reference files-api-cost.md. Should provide a cached vs uncached cost comparison. Should suggest 1h TTL given likely sparse user traffic across the day. Confidence line included."
+    },
+    {
+      "id": "priority-001-batch-vs-priority",
+      "title": "Priority Tier vs Batch API decision",
+      "shape": "audit",
+      "prompt": "I have an overnight eval pipeline running 50,000 calls. Should I move to the Priority Tier to make it run faster?",
+      "must_include": [
+        "Batch",
+        "Priority"
+      ],
+      "must_not_include": [
+        "Great question"
+      ],
+      "judge_criteria": "Response must recommend Batch API (50% discount) over Priority Tier for an overnight, latency-tolerant eval workload. Should explicitly state Batch and Priority are mutually exclusive. Should note Priority Tier is for low-latency, not low-cost. Should reference priority-tier-cost.md. Should NOT quote a specific Priority Tier multiplier (priority pricing changes); should defer to the live pricing page if a number is requested. Confidence line included."
+    }
+  ]
+}
