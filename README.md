@@ -46,6 +46,41 @@ Dashboard sanity check:
 
 > My cost dashboard reads `usage.input_tokens` from every response and multiplies by the input price. Am I doing this right? My cache-hit rate looks suspiciously stable.
 
+## Sample audit
+
+**Input:**
+
+> Here's a Claude API call I make about 5,000 times a day. Anything I should change?
+>
+> ```ts
+> client.messages.create({
+>   model: "claude-sonnet-4-6",
+>   system: SYSTEM_PROMPT, // ~6,000 tokens, identical every call
+>   messages: [{ role: "user", content: userQuery }], // ~400 tokens
+>   max_tokens: 1024,
+> });
+> ```
+>
+> Average output is 600 tokens.
+
+**Response (excerpt):**
+
+**Verdict.** Cacheable. The 6,000-token system prompt clears Sonnet 4.6's 2,048-token cache minimum. Dominant cost driver is uncached input at ~30M tokens/day; caching the system prompt cuts that by ~95% on warm calls.
+
+**Cost impact** (per 1,000 calls, steady state):
+
+| | Before | After |
+|--|--|--|
+| Input (uncached + cache reads) | $19.20 | $3.00 |
+| Output | $9.00 | $9.00 |
+| **Total** | **$28.20** | **$12.02** |
+
+~57% reduction. At 5,000 calls/day that's ~$29K/year saved.
+
+**Confidence: High.** The fact that would move this: whether traffic has gaps >5 minutes between calls. If yes, the 1-hour TTL is cheaper.
+
+Full transcript plus pipeline-review and dashboard-sanity examples in [`examples.md`](./examples.md).
+
 ## What's in the folder
 
 | File | Job |
