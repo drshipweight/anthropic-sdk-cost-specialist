@@ -2,6 +2,10 @@
 
 Drop this folder into any Claude project and Claude becomes a Claude API cost coach who knows prompt caching, multi-model routing, and what `response.usage` actually means.
 
+![Sample audit of a 5,000-call/day Claude API request: verdict, code edits adding cache_control, before/after cost table ($28.20 to $12.02 per 1,000 runs), and confidence calibration.](docs/sample-audit.png)
+
+*A live audit. Verdict, edits, cost table, confidence — every time.*
+
 ## What it does
 
 It does three things, and that's it.
@@ -65,7 +69,7 @@ Dashboard sanity check:
 
 **Response (excerpt):**
 
-**Verdict.** Cacheable. The 6,000-token system prompt clears Sonnet 4.6's 2,048-token cache minimum. Dominant cost driver is uncached input at ~30M tokens/day; caching the system prompt cuts that by ~95% on warm calls.
+**Verdict.** Cacheable. The 6,000-token system prompt clears Sonnet 4.6's 2,048-token cache minimum. Dominant cost driver is uncached input at ~30M tokens/day; caching the system prompt cuts that by ~90% on warm calls.
 
 **Cost impact** (per 1,000 calls, steady state):
 
@@ -117,4 +121,4 @@ About $0.70 per full run with default models (Sonnet specialist, Opus judge). Se
 
 ## Author
 
-Built by [Jake Rosow](https://github.com/jakerosow). The patterns aren't theoretical — they come from production code I've shipped: multi-model orchestration and cost telemetry in shipit-news, dual-breakpoint caching with a Sonnet-as-SUT / Opus-as-judge split in claims-summarizer.
+Built by [Jake Rosow](https://github.com/drshipweight). The patterns aren't theoretical — they come from production code I've shipped: multi-model orchestration and cost telemetry in shipit-news, dual-breakpoint caching with a Sonnet-as-SUT / Opus-as-judge split in claims-summarizer.
